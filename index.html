@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Tape Turing Machine Simulator</title>
+  <meta name="description" content="An interactive, academic-grade Multi-Tape Turing Machine simulator with smooth tape animation, dynamic state diagram highlighting, and 7 built-in presets." />
+  <link rel="stylesheet" href="style.css?v=5" />
+  <!-- D3.js for state diagram rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══════════════ HEADER ═══════════════ -->
+  <header id="app-header">
+    <div class="header-brand">
+      <div class="brand-icon">⊢</div>
+      <div>
+        <div class="brand-title">Multi-Tape Turing Machine</div>
+        <div class="brand-subtitle">Interactive Simulator · Academic Edition</div>
+      </div>
+    </div>
+
+    <nav class="header-nav">
+      <button class="nav-btn" id="nav-setup" onclick="switchView('setup')">⚙ Setup</button>
+      <button class="nav-btn active" id="nav-simulate" onclick="switchView('simulate')">▶ Simulate</button>
+    </nav>
+
+    <div class="header-status">
+      <div class="status-pill idle" id="status-pill">
+        <div class="status-dot"></div>
+        <span id="status-text">Idle</span>
+      </div>
+      <div class="steps-counter">Steps: <span id="header-steps">0</span></div>
+    </div>
+  </header>
+
+  <!-- ═══════════════ SETUP VIEW ═══════════════ -->
+  <section id="setup-view" class="view">
+
+    <!-- Left: Presets + Config -->
+    <aside class="setup-left">
+
+      <div class="panel-header" style="flex-shrink:0;">
+        <div class="panel-title">Machine Configuration</div>
+        <div class="panel-desc">Select a preset or define custom transitions</div>
+      </div>
+
+      <!-- Scrollable middle content -->
+      <div class="setup-left-scroll">
+
+        <div class="presets-section">
+          <div class="presets-label">Preset Programs</div>
+          <div class="presets-grid" id="presets-grid">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+
+        <div class="input-config">
+          <div class="presets-label">Tape &amp; Machine Settings</div>
+          <div class="config-row">
+            <!-- Tape input fields — built dynamically by buildTapeInputFields() -->
+            <div id="tape-inputs-wrapper" style="grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:8px;"></div>
+            <div class="field-group">
+              <label class="field-label" for="num-tapes">Number of Tapes</label>
+              <select class="field-input" id="num-tapes">
+                <option value="1">1 tape</option>
+                <option value="2" selected>2 tapes</option>
+                <option value="3">3 tapes</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="blank-symbol">Blank Symbol</label>
+              <input class="field-input" type="text" id="blank-symbol" value="_" maxlength="1" style="font-family:'Fira Code',monospace;" />
+            </div>
+          </div>
+        </div>
+
+        <div class="machine-info-bar" id="setup-machine-info">
+          <span class="machine-name-display" id="setup-machine-name">String Copy (ww)</span>
+          <span class="machine-info-badge tapes" id="info-tapes">2 tapes</span>
+          <span class="machine-info-badge states" id="info-states">— states</span>
+          <span class="machine-info-badge rules" id="info-rules">— rules</span>
+        </div>
+
+      </div><!-- /.setup-left-scroll -->
+
+      <!-- Pinned at bottom: Launch button -->
+      <div style="padding:10px 16px; border-top:1px solid var(--border-light); flex-shrink:0;">
+        <button class="btn btn-primary" style="width:100%; justify-content:center; padding:10px;"
+          onclick="goSimulate()">
+          ▶&ensp;Launch Simulation
+        </button>
+      </div>
+    </aside>
+
+    <!-- Middle: Transition Editor -->
+    <div class="setup-middle">
+      <div class="transition-toolbar">
+        <span class="panel-title" style="font-size:13px; color:var(--text-primary); text-transform:none; letter-spacing:0;">
+          Transition Function &nbsp;<span style="color:var(--text-muted); font-family:'Fira Code',monospace; font-size:12px;">(δ)</span>
+        </span>
+        <div class="toolbar-group">
+          <button class="btn" id="add-rule-btn" onclick="openAddRuleModal()">
+            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a.5.5 0 0 1 .5.5v6h6a.5.5 0 0 1 0 1h-6v6a.5.5 0 0 1-1 0v-6h-6a.5.5 0 0 1 0-1h6v-6A.5.5 0 0 1 8 1z"/></svg>
+            Add Rule
+          </button>
+          <button class="btn btn-danger" onclick="clearAllRules()">
+            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="transition-table-wrap">
+        <table class="transition-table" id="transition-table">
+          <thead>
+            <tr>
+              <th>Current State</th>
+              <th>Read Symbols</th>
+              <th>Next State</th>
+              <th>Write Symbols</th>
+              <th>Head Moves</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="transition-tbody">
+            <tr><td colspan="6" class="no-rules-msg">
+              <span>🔧</span>
+              No transition rules defined.<br/>
+              Select a preset or click <strong>Add Rule</strong>.
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- Right: State Diagram -->
+    <div class="setup-right">
+      <div class="panel-header">
+        <div class="panel-title">State Diagram</div>
+        <div class="panel-desc">Visual representation of (Q, Σ, Γ, δ, q₀, F)</div>
+      </div>
+      <div id="setup-diagram-container"></div>
+      <div class="diagram-legend">
+        <div class="legend-item"><div class="legend-dot start"></div>Start</div>
+        <div class="legend-item"><div class="legend-dot normal"></div>Normal</div>
+        <div class="legend-item"><div class="legend-dot accept"></div>Accept</div>
+        <div class="legend-item"><div class="legend-dot reject"></div>Reject</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ═══════════════ SIMULATE VIEW ═══════════════ -->
+  <section id="simulate-view" class="view active">
+
+    <!-- Main: Tapes + Controls -->
+    <div class="sim-main">
+
+      <!-- Controls Bar -->
+      <div class="controls-bar">
+        <div class="control-group">
+          <button class="ctrl-btn play-btn" id="play-btn" onclick="togglePlay()"
+            data-tooltip="Play / Pause (Space)">▶</button>
+          <button class="ctrl-btn step-btn" id="step-btn" onclick="doStep()"
+            data-tooltip="Step (→)">⏭</button>
+          <button class="ctrl-btn reset-btn" id="reset-btn" onclick="doReset()"
+            data-tooltip="Reset (R)">⟳</button>
+        </div>
+
+        <div class="control-divider"></div>
+
+        <div class="speed-group">
+          <span class="speed-label">Speed</span>
+          <input type="range" class="speed-slider" id="speed-slider"
+            min="1" max="10" value="4" oninput="updateSpeed(this.value)" />
+          <span class="speed-value" id="speed-value">250ms</span>
+        </div>
+
+        <div class="control-divider"></div>
+
+        <button class="ctrl-btn goto-setup-btn btn" onclick="switchView('setup')"
+          data-tooltip="Go to Setup">⚙ Setup</button>
+
+        <div class="machine-name" id="sim-machine-name">String Copy (ww)</div>
+      </div>
+
+      <!-- Tapes -->
+      <div class="tapes-area" id="tapes-area">
+        <!-- Filled by JS -->
+      </div>
+    </div>
+
+    <!-- Sidebar: Monitor + State Diagram -->
+    <aside class="sim-sidebar">
+
+      <!-- State Monitor -->
+      <div class="state-monitor">
+        <div class="monitor-title">Machine Monitor</div>
+        <div class="state-display">
+          <div class="state-row">
+            <span class="state-row-label">Current State</span>
+            <div class="current-state-badge" id="current-state-badge">—</div>
+          </div>
+
+          <div class="steps-big" id="steps-big">
+            0
+            <small>Steps Taken</small>
+          </div>
+
+          <div class="state-row" style="margin-top:4px;">
+            <span class="state-row-label">Accept States</span>
+            <span style="font-family:'Fira Code',monospace;font-size:12px;color:var(--accent-green);" id="accept-states-display">—</span>
+          </div>
+          <div class="state-row">
+            <span class="state-row-label">Reject State</span>
+            <span style="font-family:'Fira Code',monospace;font-size:12px;color:var(--accent-rose);" id="reject-state-display">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tape Summary -->
+      <div class="tape-summary" id="tape-summary">
+        <div class="monitor-title">Tape Contents</div>
+        <!-- Filled by JS -->
+      </div>
+
+      <!-- State Diagram -->
+      <div class="panel-header" style="flex-shrink:0; border-top:1px solid var(--border-light);">
+        <div class="panel-title">State Diagram</div>
+      </div>
+      <div id="sim-diagram-container"></div>
+      <div class="diagram-legend">
+        <div class="legend-item"><div class="legend-dot start"></div>Start</div>
+        <div class="legend-item"><div class="legend-dot active"></div>Active</div>
+        <div class="legend-item"><div class="legend-dot accept"></div>Accept</div>
+        <div class="legend-item"><div class="legend-dot reject"></div>Reject</div>
+      </div>
+
+    </aside>
+
+  </section>
+
+</div><!-- #app -->
+
+<!-- ═══════════════ MODAL: Add / Edit Rule ═══════════════ -->
+<div class="modal-overlay" id="rule-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Add Transition Rule</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-form-grid">
+        <div class="field-group">
+          <label class="field-label" for="m-cur-state">Current State</label>
+          <input class="field-input" type="text" id="m-cur-state" placeholder="q0" spellcheck="false" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="m-next-state">Next State</label>
+          <input class="field-input" type="text" id="m-next-state" placeholder="q1" spellcheck="false" />
+        </div>
+        <div class="field-group full">
+          <label class="field-label">Read Symbols (one per tape)</label>
+          <div class="symbols-grid" id="modal-read-symbols"></div>
+        </div>
+        <div class="field-group full">
+          <label class="field-label">Write Symbols (one per tape)</label>
+          <div class="symbols-grid" id="modal-write-symbols"></div>
+        </div>
+        <div class="field-group full">
+          <label class="field-label">Head Movements (one per tape)</label>
+          <div class="symbols-grid" id="modal-moves"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-save-btn" onclick="saveRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TOAST CONTAINER ═══════════════ -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="script.js?v=8"></script>
+</body>
+</html>
