@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Multi-Tape Turing Machine Simulator</title>
   <meta name="description" content="An interactive, academic-grade Multi-Tape Turing Machine simulator with smooth tape animation, dynamic state diagram highlighting, and 7 built-in presets." />
-  <link rel="stylesheet" href="style.css?v=5" />
+  <link rel="stylesheet" href="style.css?v=12" />
   <!-- D3.js for state diagram rendering -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 </head>
@@ -87,8 +87,8 @@
       </div><!-- /.setup-left-scroll -->
 
       <!-- Pinned at bottom: Launch button -->
-      <div style="padding:10px 16px; border-top:1px solid var(--border-light); flex-shrink:0;">
-        <button class="btn btn-primary" style="width:100%; justify-content:center; padding:10px;"
+      <div style="padding:10px 16px; border-top:1px solid var(--border); flex-shrink:0;">
+        <button class="btn btn-primary launch-btn" style="width:100%; justify-content:center; padding:12px;"
           onclick="goSimulate()">
           ▶&ensp;Launch Simulation
         </button>
@@ -229,7 +229,7 @@
       </div>
 
       <!-- State Diagram -->
-      <div class="panel-header" style="flex-shrink:0; border-top:1px solid var(--border-light);">
+      <div class="panel-header" style="flex-shrink:0; border-top:1px solid var(--border);">
         <div class="panel-title">State Diagram</div>
       </div>
       <div id="sim-diagram-container"></div>
@@ -287,6 +287,6 @@
 <!-- ═══════════════ TOAST CONTAINER ═══════════════ -->
 <div class="toast-container" id="toast-container"></div>
 
-<script src="script.js?v=8"></script>
+<script src="script.js?v=12"></script>
 </body>
 </html>

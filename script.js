@@ -527,7 +527,7 @@ function renderTape(ti,flash=false){
   const track=document.getElementById(`tape-track-${ti}`);
   const vp=document.getElementById(`tape-viewport-${ti}`);
   if(!track||!vp) return;
-  const head=machine.heads[ti], cellW=48;
+  const head=machine.heads[ti], cellW=50;
   let buf=tapeBuffers[ti];
   const needRebuild=!buf||head<=buf.renderMin+VISIBLE_CELLS+2||head>=buf.renderMax-VISIBLE_CELLS-2;
 
@@ -696,8 +696,9 @@ function renderDiagram(cid){
   if(!machine) return;
   const container=document.getElementById(cid); if(!container) return;
   container.innerHTML='';
-  const W=container.clientWidth||280, H=container.clientHeight||260;
-  const states=machine.getStates(), nodeR=20;
+  const W=container.clientWidth||400, H=container.clientHeight||350;
+  const states=machine.getStates(), nodeR=26;
+  const pad=nodeR*3;
 
   // Layout: BFS layers
   const visited=new Map(), adj={};
@@ -721,58 +722,121 @@ function renderDiagram(cid){
   });
   const allX=states.map(s=>nodeMap[s].x), allY=states.map(s=>nodeMap[s].y);
   const mnX=Math.min(...allX),mxX=Math.max(...allX),mnY=Math.min(...allY),mxY=Math.max(...allY);
-  const scX=mxX===mnX?1:(W-nodeR*4)/(mxX-mnX), scY=mxY===mnY?1:(H-nodeR*4)/(mxY-mnY);
-  states.forEach(s=>{ nodeMap[s].sx=nodeR*2+(nodeMap[s].x-mnX)*scX; nodeMap[s].sy=nodeR*2+(nodeMap[s].y-mnY)*scY; });
+  const scX=mxX===mnX?1:(W-pad*2)/(mxX-mnX), scY=mxY===mnY?1:(H-pad*2)/(mxY-mnY);
+  states.forEach(s=>{ nodeMap[s].sx=pad+(nodeMap[s].x-mnX)*scX; nodeMap[s].sy=pad+(nodeMap[s].y-mnY)*scY; });
 
   // Edges
   const edgeMap={};
   for(const [st,rules] of Object.entries(machine.transitions))
     for(const [rk,rule] of Object.entries(rules)){
       const k=`${st}:::${rule.nextState}`; if(!edgeMap[k]) edgeMap[k]={from:st,to:rule.nextState,labels:[]};
-      edgeMap[k].labels.push(rk+'→'+rule.write.join(','));
+      const reads=rk.split(','), writes=rule.write, moves=rule.move;
+      const parts=reads.map((r,i)=>`${r}/${writes[i]},${moves[i]}`);
+      edgeMap[k].labels.push(parts.join(' '));
     }
   const edges=Object.values(edgeMap);
 
+  // Format label lines — show up to 3 transitions, with "…" overflow
+  function formatLabel(labels){
+    const maxShow=3;
+    const lines=labels.slice(0,maxShow);
+    if(labels.length>maxShow) lines.push(`+${labels.length-maxShow} more`);
+    return lines;
+  }
+
   const svg=d3.select(container).append('svg').attr('class','diagram-svg').attr('viewBox',`0 0 ${W} ${H}`).attr('width',W).attr('height',H);
   const defs=svg.append('defs');
-  [['arrowhead','#c8c0b4'],['arrowhead-active','#4a7fb5']].forEach(([id,color])=>{
-    defs.append('marker').attr('id',id).attr('viewBox','0 0 10 10').attr('refX',18).attr('refY',5)
-      .attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto')
-      .append('path').attr('d','M 0 0 L 10 5 L 0 10 z').attr('fill',color);
+
+  // Arrowhead markers — bigger for visibility
+  [['arrowhead','#64748b'],['arrowhead-active','#38bdf8']].forEach(([id,color])=>{
+    defs.append('marker').attr('id',id).attr('viewBox','0 0 10 10')
+      .attr('refX',10).attr('refY',5)
+      .attr('markerWidth',8).attr('markerHeight',8).attr('orient','auto')
+      .append('path').attr('d','M 0 1 L 10 5 L 0 9 z').attr('fill',color);
   });
 
-  const edgesG=svg.append('g');
+  // Glow filter for active elements
+  const glowFilter=defs.append('filter').attr('id',`glow-${cid}`).attr('x','-50%').attr('y','-50%').attr('width','200%').attr('height','200%');
+  glowFilter.append('feGaussianBlur').attr('stdDeviation','3').attr('result','blur');
+  glowFilter.append('feMerge').selectAll('feMergeNode').data(['blur','SourceGraphic']).enter()
+    .append('feMergeNode').attr('in',d=>d);
+
+  // Label background filter for readability
+  const bgFilter=defs.append('filter').attr('id',`lbl-bg-${cid}`).attr('x','-0.06').attr('y','-0.15').attr('width','1.12').attr('height','1.3');
+  bgFilter.append('feFlood').attr('flood-color','#161822').attr('flood-opacity','0.85');
+  bgFilter.append('feComposite').attr('in','SourceGraphic').attr('operator','over');
+
+  const edgesG=svg.append('g').attr('class','diagram-edges');
   edges.forEach(e=>{
     const fn=nodeMap[e.from],tn=nodeMap[e.to]; if(!fn||!tn) return;
     const isSelf=e.from===e.to, eid=`edge-${cid}-${CSS.escape(e.from+'_'+e.to)}`;
     const hasBidi=edges.some(x=>x.from===e.to&&x.to===e.from);
-    const lbl=e.labels.length>2?e.labels.slice(0,2).join(';')+'…':e.labels.join(';');
+    const lines=formatLabel(e.labels);
+
     if(isSelf){
-      const cx=fn.sx,cy=fn.sy-nodeR-16;
+      const cx=fn.sx,cy=fn.sy-nodeR-20;
+      // Bigger self-loop arc
       edgesG.append('path').attr('class','transition-edge').attr('id',eid)
-        .attr('d',`M ${cx-10} ${fn.sy-nodeR} C ${cx-30} ${cy-22} ${cx+30} ${cy-22} ${cx+10} ${fn.sy-nodeR}`).attr('marker-end','url(#arrowhead)');
-      edgesG.append('text').attr('class','edge-label').attr('id',`label-${eid}`).attr('x',cx).attr('y',cy-24).text(lbl);
+        .attr('d',`M ${cx-12} ${fn.sy-nodeR} C ${cx-40} ${cy-30} ${cx+40} ${cy-30} ${cx+12} ${fn.sy-nodeR}`)
+        .attr('marker-end','url(#arrowhead)');
+      // Multi-line label with background
+      const lblG=edgesG.append('g').attr('id',`label-${eid}`);
+      const textEl=lblG.append('text').attr('class','edge-label').attr('x',cx).attr('y',cy-36);
+      lines.forEach((ln,i)=>{
+        textEl.append('tspan').attr('x',cx).attr('dy',i===0?0:'1.15em').text(ln);
+      });
+      // Add background rect behind label
+      try{
+        const bbox=textEl.node().getBBox();
+        lblG.insert('rect','text').attr('class','edge-label-bg')
+          .attr('x',bbox.x-4).attr('y',bbox.y-2).attr('width',bbox.width+8).attr('height',bbox.height+4)
+          .attr('rx',3);
+      }catch(e){}
     } else {
-      const dx=tn.sx-fn.sx,dy=tn.sy-fn.sy,dist=Math.sqrt(dx*dx+dy*dy),ux=dx/dist,uy=dy/dist;
-      const cv=hasBidi?20:0,mx=(fn.sx+tn.sx)/2-uy*cv,my=(fn.sy+tn.sy)/2+ux*cv;
+      const dx=tn.sx-fn.sx,dy=tn.sy-fn.sy,dist=Math.sqrt(dx*dx+dy*dy)||1,ux=dx/dist,uy=dy/dist;
+      const cv=hasBidi?25:0,mx=(fn.sx+tn.sx)/2-uy*cv,my=(fn.sy+tn.sy)/2+ux*cv;
       const x1=fn.sx+ux*nodeR,y1=fn.sy+uy*nodeR,x2=tn.sx-ux*nodeR,y2=tn.sy-uy*nodeR;
       edgesG.append('path').attr('class','transition-edge').attr('id',eid)
-        .attr('d',cv?`M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`:`M ${x1} ${y1} L ${x2} ${y2}`).attr('marker-end','url(#arrowhead)');
-      edgesG.append('text').attr('class','edge-label').attr('id',`label-${eid}`).attr('x',mx||(fn.sx+tn.sx)/2).attr('y',(my||(fn.sy+tn.sy)/2)-6).text(lbl);
+        .attr('d',cv?`M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`:`M ${x1} ${y1} L ${x2} ${y2}`)
+        .attr('marker-end','url(#arrowhead)');
+      // Multi-line label with background
+      const lx=mx||(fn.sx+tn.sx)/2, ly=(my||(fn.sy+tn.sy)/2)-8;
+      const lblG=edgesG.append('g').attr('id',`label-${eid}`);
+      const textEl=lblG.append('text').attr('class','edge-label').attr('x',lx).attr('y',ly);
+      lines.forEach((ln,i)=>{
+        textEl.append('tspan').attr('x',lx).attr('dy',i===0?0:'1.15em').text(ln);
+      });
+      try{
+        const bbox=textEl.node().getBBox();
+        lblG.insert('rect','text').attr('class','edge-label-bg')
+          .attr('x',bbox.x-4).attr('y',bbox.y-2).attr('width',bbox.width+8).attr('height',bbox.height+4)
+          .attr('rx',3);
+      }catch(e){}
     }
   });
 
   // Start arrow
   const sn=nodeMap[machine.startState];
-  if(sn) svg.append('path').attr('class','transition-edge').attr('d',`M ${sn.sx-nodeR-18} ${sn.sy} L ${sn.sx-nodeR} ${sn.sy}`).attr('marker-end','url(#arrowhead)');
+  if(sn){
+    svg.append('path').attr('class','transition-edge start-arrow')
+      .attr('d',`M ${sn.sx-nodeR-22} ${sn.sy} L ${sn.sx-nodeR-2} ${sn.sy}`)
+      .attr('marker-end','url(#arrowhead)');
+  }
 
-  const nodesG=svg.append('g');
+  const nodesG=svg.append('g').attr('class','diagram-nodes');
   states.forEach(st=>{
     const n=nodeMap[st]; if(!n) return;
     const g=nodesG.append('g').attr('class','state-node-group').attr('id',`node-${cid}-${CSS.escape(st)}`);
-    g.append('circle').attr('class',`state-node-circle${n.accept?' accept':''}${n.reject?' reject':''}`).attr('cx',n.sx).attr('cy',n.sy).attr('r',nodeR);
-    if(n.accept) g.append('circle').attr('class','state-inner-circle accept').attr('cx',n.sx).attr('cy',n.sy).attr('r',nodeR-5);
-    g.append('text').attr('class',`state-node-text${n.accept?' accept':''}${n.reject?' reject':''}`).attr('x',n.sx).attr('y',n.sy).text(st);
+    // Outer glow circle (subtle)
+    g.append('circle').attr('class','state-node-glow').attr('cx',n.sx).attr('cy',n.sy).attr('r',nodeR+4)
+      .attr('fill','none').attr('stroke','transparent').attr('stroke-width',0);
+    // Main circle
+    g.append('circle').attr('class',`state-node-circle${n.accept?' accept':''}${n.reject?' reject':''}${n.start?' start':''}`)
+      .attr('cx',n.sx).attr('cy',n.sy).attr('r',nodeR);
+    if(n.accept) g.append('circle').attr('class','state-inner-circle accept').attr('cx',n.sx).attr('cy',n.sy).attr('r',nodeR-6);
+    // State label
+    g.append('text').attr('class',`state-node-text${n.accept?' accept':''}${n.reject?' reject':''}`)
+      .attr('x',n.sx).attr('y',n.sy).text(st);
   });
 
   if(machine.currentState) highlightDiagramState(cid,machine.currentState);
