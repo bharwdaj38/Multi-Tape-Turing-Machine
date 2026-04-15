@@ -16,6 +16,7 @@ const PRESETS = [
     startState:'q0', tapeInputs:['',''],
     transitions:{ q0:{}, q_accept:{}, q_reject:{} },
     description:'Start blank. Add your own states and transitions.',
+    example:'Define your own transitions',
   },
 
   /* ── 1. String Copy (ww) ───────────────────────────────────── */
@@ -39,6 +40,7 @@ const PRESETS = [
       q_accept:{}, q_reject:{},
     },
     description:'Copies input on T1 to T2 in O(n). T2 head rewinds as verification.',
+    example:'Input: 1011 → Output: T2 = 1011',
   },
 
   /* ── 2. Palindrome Checker ─────────────────────────────────── */
@@ -83,6 +85,7 @@ const PRESETS = [
       q_accept:{}, q_reject:{},
     },
     description:'Copies T1 to T2, then compares T1 forward vs T2 backward in O(n).',
+    example:'10101 → Accept ✓ | 1010 → Reject ✗',
   },
 
   /* ── 3. Binary Adder ───────────────────────────────────────── */
@@ -134,6 +137,7 @@ const PRESETS = [
       q_accept:{}, q_reject:{},
     },
     description:'Adds binary numbers on T1 and T2 right-to-left with carry. Result on T1. "101"(5)+"011"(3)="1000"(8).',
+    example:'101 + 011 = 1000 (5+3=8)',
   },
 
   /* ── 4. aⁿbⁿ Checker ──────────────────────────────────────── */
@@ -160,6 +164,7 @@ const PRESETS = [
       q_accept:{}, q_reject:{},
     },
     description:"Accepts aⁿbⁿ in O(n). T2 stores tally of a's; erased one-per-b.",
+    example:'aaabbb → Accept ✓ | aabb b → Reject ✗',
   },
 
   /* ── 5. aⁿbⁿcⁿ Checker ────────────────────────────────────── */
@@ -196,6 +201,7 @@ const PRESETS = [
       q_accept:{}, q_reject:{},
     },
     description:'Accepts aⁿbⁿcⁿ in O(n). T2 = a-tally, T3 = b-tally, erased by c.',
+    example:'aabbcc → Accept ✓ | aabbc → Reject ✗',
   },
 
   /* ── 6. Bit Inverter ───────────────────────────────────────── */
@@ -212,6 +218,7 @@ const PRESETS = [
       q_accept:{}, q_reject:{},
     },
     description:'Reads T1 and writes its bitwise complement to T2 in O(n).',
+    example:'10110 → T2 = 01001',
   },
 
   /* ── 7. Binary → Unary (decrement-and-tally) ──────────────── */
@@ -254,6 +261,7 @@ const PRESETS = [
       q_accept:{}, q_reject:{},
     },
     description:'"101" (5) → ||||| on T2. Subtracts 1 from T1 per tally mark until 0.',
+    example:'101 (5) → T2 = ||||| (5 tallies)',
   },
 ];
 
@@ -362,7 +370,7 @@ class MultiTapeTuringMachine {
    APP STATE
    ══════════════════════════════════════════════════════════════ */
 let machine=null, playInterval=null, isPlaying=false, speedMs=250;
-let currentPresetId='string_copy', editingRuleId=null, currentView='simulate';
+let currentPresetId='string_copy', editingRuleId=null, currentView='setup';
 let numTapes=2, blankSymbol='_';
 const tapeBuffers=[];
 
@@ -392,7 +400,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   buildTapeUI(); renderTransitionTable(); updateUI();
   renderDiagram('setup-diagram-container'); renderDiagram('sim-diagram-container');
-  setupKeyboardShortcuts(); switchView('simulate');
+  setupKeyboardShortcuts(); switchView('setup');
 });
 
 function buildPresetCards(){
@@ -403,7 +411,8 @@ function buildPresetCards(){
     c.id=`preset-card-${p.id}`;
     c.innerHTML=`<div class="preset-card-icon">${p.icon}</div>
       <div><div class="preset-card-name">${p.name}</div>
-      <div class="preset-card-desc">${p.desc}</div></div>`;
+      <div class="preset-card-desc">${p.desc}</div>
+      ${p.example?`<div class="preset-card-example">${p.example}</div>`:''}</div>`;
     c.onclick=()=>loadPreset(p.id); grid.appendChild(c);
   });
 }
@@ -697,8 +706,24 @@ function renderDiagram(cid){
   const container=document.getElementById(cid); if(!container) return;
   container.innerHTML='';
   const W=container.clientWidth||400, H=container.clientHeight||350;
-  const states=machine.getStates(), nodeR=26;
+  let allStates=machine.getStates(), nodeR=26;
   const pad=nodeR*3;
+
+  // Check if q_reject has any incoming or outgoing edges
+  const rejectSt=machine.rejectState;
+  const rejectHasOutgoing=machine.transitions[rejectSt]&&Object.keys(machine.transitions[rejectSt]).length>0;
+  let rejectHasIncoming=false;
+  for(const [st,rules] of Object.entries(machine.transitions)){
+    if(st===rejectSt) continue;
+    for(const rule of Object.values(rules)){
+      if(rule.nextState===rejectSt){ rejectHasIncoming=true; break; }
+    }
+    if(rejectHasIncoming) break;
+  }
+  // Filter out disconnected reject state from diagram
+  const states=(!rejectHasOutgoing&&!rejectHasIncoming)
+    ? allStates.filter(s=>s!==rejectSt)
+    : allStates;
 
   // Layout: BFS layers
   const visited=new Map(), adj={};
